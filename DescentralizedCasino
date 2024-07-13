@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+contract DecentralizedCasino {
+    address public owner;
+    uint public minimumBet;
+    uint public houseEdge; // House edge in percentage, e.g., 2 means 2%
+
+    struct Player {
+        uint amountBet;
+        uint8 numberSelected;
+    }
+
+    struct Bet {
+        address player;
+        uint amount;
+        uint8 numberSelected;
+    }
+
+    mapping(address => Player) public playerInfo;
+    Bet[] public bets;
+    address[] public players;
+
+    event BetPlaced(address indexed player, uint amount, uint8 numberSelected);
+    event BetResult(address indexed player, uint amount, bool won, uint winningNumber);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner can perform this action");
+        _;
+    }
+
+    constructor(uint _minimumBet, uint _houseEdge) {
+        owner = msg.sender;
+        minimumBet = _minimumBet;
+        houseEdge = _houseEdge;
+    }
+
+    function placeBet(uint8 _numberSelected) public payable {
+        require(msg.value >= minimumBet, "Bet amount is less than the minimum bet");
+        require(_numberSelected >= 1 && _numberSelected <= 10, "Number selected must be between 1 and 10");
+
+        playerInfo[msg.sender] = Player({
+            amountBet: msg.value,
+            numberSelected: _numberSelected
+        });
+
+        bets.push(Bet({
+            player: msg.sender,
+            amount: msg.value,
+            numberSelected: _numberSelected
+        }));
+
+        players.push(msg.sender);
+
+        emit BetPlaced(msg.sender, msg.value, _numberSelected);
+    }
+
+    function generateRandomNumber() private view returns (uint8) {
+        return uint8(uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty))) % 10 + 1);
+    }
+
+    function distributePrizes() public onlyOwner {
+        uint8 winningNumber = generateRandomNumber();
+
+        for (uint i = 0; i < bets.length; i++) {
+            address playerAddress = bets[i].player;
+            uint amountBet = bets[i].amount;
+            uint8 numberSelected = bets[i].numberSelected;
+
+            if (numberSelected == winningNumber) {
+                uint prize = amountBet * 10 / (100 + houseEdge);
+                payable(playerAddress).transfer(prize);
+                emit BetResult(playerAddress, amountBet, true, winningNumber);
+            } else {
+                emit BetResult(playerAddress, amountBet, false, winningNumber);
+            }
+        }
+
+        // Resetting the players and bets
+        for (uint i = 0; i < players.length; i++) {
+            address playerAddress = players[i];
+            delete playerInfo[playerAddress];
+        }
+
+        delete bets;
+        delete players;
+    }
+
+    function withdrawFunds(uint _amount) public onlyOwner {
+        require(_amount <= address(this).balance, "Insufficient funds in the contract");
+        payable(owner).transfer(_amount);
+    }
+
+    function getBalance() public view returns (uint) {
+        return address(this).balance;
+    }
+
+    receive() external payable {}
+}
