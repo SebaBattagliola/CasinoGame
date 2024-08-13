@@ -76,7 +76,7 @@ contract DecentralizedCasino {
             }
         }
 
-        // Resetting the players and bets
+        // Resetting the players and bets -> incluyed the game play basic 
         for (uint i = 0; i < players.length; i++) {
             address playerAddress = players[i];
             delete playerInfo[playerAddress];
